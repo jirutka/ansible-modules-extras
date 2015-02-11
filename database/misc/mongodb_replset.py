@@ -163,7 +163,8 @@ def main():
             'login_port':     {'aliases': ['port'], 'default': 27017},
             'hosts':          {'aliases': ['members'], 'required': True},
             'replica_set':    {'aliases': ['replset'], 'required': True}
-        }
+        },
+        required_together=[['login_host', 'login_port']]
     )
 
     if not pymongo_found:
@@ -191,8 +192,6 @@ def main():
             if credentials is not False:
                 user = credentials['user']
                 password = credentials['password']
-        elif not password and user:
-            module.fail_json(msg='When supplying login arguments, both login_user and login_password must be provided')
 
         if user and password:
             try:
