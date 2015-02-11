@@ -111,7 +111,7 @@ def add_members(client, members):
     """
     conf = replset_conf(client)
     curr_hosts = [m['host'] for m in conf['members']]
-    new_hosts = [join_colon(x) for x in members]
+    new_hosts = format_hosts(members)
 
     new_id = max([int(x['_id']) for x in conf['members']]) + 1
     for host in (set(new_hosts) - set(curr_hosts)):
@@ -120,6 +120,12 @@ def add_members(client, members):
 
     conf['version'] += 1
     client.admin.command('replSetReconfig', conf)
+
+
+def members_state(client):
+    """ Return dict of the replica set members with their state info. """
+    members = client.admin.command('replSetGetStatus')['members']
+    return dict((m['name'], {'state': m['stateStr']}) for m in members)
 
 
 def replset_initiate(client, name, members):
@@ -134,6 +140,14 @@ def replset_initiate(client, name, members):
     hosts = [{'_id': idx, 'host': join_colon(val)} for idx, val in enumerate(members)]
     conf = {'_id': name, 'members': hosts}
     client.admin.command('replSetInitiate', conf)
+
+
+def format_hosts(members):
+    """
+    :param members: list of tuples that contain a hostname and a port
+    :return: list of strings of the form `hostname[:port]`
+    """
+    return [join_colon(x) for x in members]
 
 
 def join_colon(iterable):
@@ -189,28 +203,34 @@ def main():
     except ConnectionFailure, e:
         module.fail_json(msg="unable to connect to database: %s" % e)
 
-    changed = True
     if initiated:
-        removed_hosts = client.hosts - set(nodes)
-        added_hosts = set(nodes) - client.hosts
-        if removed_hosts:
+        changed = True
+        absent_hosts = client.hosts - set(nodes)
+        new_hosts = set(nodes) - client.hosts
+
+        if absent_hosts:
             module.fail_json(msg="This module doesn't support members removing",
-                             members="'%s'" % removed_hosts)
-        elif added_hosts:
+                             absent_hosts=format_hosts(absent_hosts),
+                             members=members_state(client))
+        elif new_hosts:
             try:
                 add_members(client, nodes)
             except OperationFailure, e:
                 module.fail_json(msg="Unable to add new members: %s" % e,
-                                 members="'%s'" % added_hosts)
+                                 new_hosts=format_hosts(new_hosts),
+                                 members=members_state(client))
         else:
             changed = False
+
+        module.exit_json(changed=changed,
+                         added_hosts=format_hosts(new_hosts),
+                         members=members_state(client))
     else:
         try:
             replset_initiate(client, replset, nodes)
+            module.exit_json(changed=True, members=members_state(client))
         except OperationFailure, e:
             module.fail_json(msg="Unable to initiate replica set: %s" % e)
-
-    module.exit_json(changed=changed)
 
 # import module snippets
 from ansible.module_utils.basic import *
