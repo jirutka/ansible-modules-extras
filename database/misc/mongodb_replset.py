@@ -32,36 +32,32 @@ options:
   login_user:
     description:
       - The username used to authenticate with.
-    aliases: [ "user" ]
-    required: false
+    aliases: [ user ]
   login_password:
     description:
       - The password used to authenticate with.
-    aliases: [ "password" ]
-    required: false
+    aliases: [ password ]
   login_host:
     description:
       - The first host to connect when initiating the replica set.
-    aliases: [ "host" ]
-    required: false
+    aliases: [ host ]
     default: localhost
   login_port:
     description:
       - Port of the first host to connect when initiating the replica set.
-    aliases: [ "port" ]
-    required: false
-    default: "27017"
+    aliases: [ port ]
+    default: 27017
   hosts:
     description:
       - A comma delimited list of replica set members.
-    aliases: [ "members" ]
     required: true
+    aliases: [ members ]
     example: mongo0,mango1:27011,mango2:27012
   replica_set:
     description:
       - Name of the replica set to create or connect to.
-    aliases: [ "replset" ]
     required: true
+    aliases: [ replset ]
     default: "rs0"
 '''
 
