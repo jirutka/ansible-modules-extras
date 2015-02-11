@@ -77,19 +77,17 @@ except ImportError:
     pymongo_found = False
 
 
-def load_mongocnf_creds():
-    """ Read credentials from ~/.mongodb.cnf file, when exists. """
+def read_mongocnf_creds():
+    """ Read credentials from ~/.mongodb.cnf file, when exists.
+
+    :return: tuple of username and password
+    """
     config = ConfigParser.RawConfigParser()
     try:
         config.read(os.path.expanduser('~/.mongodb.cnf'))
-        creds = {
-            'user': config.get('client', 'user'),
-            'password': config.get('client', 'pass')
-        }
+        return (config.get('client', 'user'), config.get('client', 'pass'))
     except (ConfigParser.Error, IOError):
-        return False
-
-    return creds
+        return (None, None)
 
 
 def replset_conf(client):
@@ -175,6 +173,9 @@ def main():
                                    'login_port', 'hosts', 'replica_set'])
     nodes = split_hosts(hosts)
 
+    if not user and not password:
+        user, password = read_mongocnf_creds()
+
     initiated = False
     try:
         try:
@@ -186,12 +187,6 @@ def main():
                 client = MongoClient(host, int(port), read_preference=ReadPreference.SECONDARY)
             else:
                 module.fail_json(msg="Unable to connect: %s" % e)
-
-        if not user and not password:
-            credentials = load_mongocnf_creds()
-            if credentials is not False:
-                user = credentials['user']
-                password = credentials['password']
 
         if user and password:
             try:
