@@ -38,7 +38,7 @@ options:
       - This option is mutually exclusive with C(group_id) and C(artifact_id).
         C(version), C(classifier) or C(extension) are used only when they are not specified in
         C(name).
-    aliases: [artifact]
+    aliases: [ artifact ]
   group_id:
     description:
       - GroupId of the artifact to download.
@@ -60,6 +60,17 @@ options:
     description:
       - URL of the Maven repository to download artifact from.
     default: http://repo1.maven.org/maven2
+  repo_username:
+    description:
+      - The username for use in HTTP Basic authentication.
+    aliases: [ username ]
+  repo_password:
+    description:
+      - The password for use in HTTP Basic authentication.
+      - If the C(url_username) parameter is not specified, the C(url_password) parameter will not
+        be used.
+    aliases: [ password ]
+    default: ''
   dest:
     description:
       - Absolute path of where to download the file to.
@@ -67,12 +78,12 @@ options:
       classifier and extension of the artifact.
     required: true
   state:
-    choices: [present, absent]
+    choices: [ present, absent ]
     default: present
   others:
     description:
       - all arguments accepted by the M(file) module also work here
-requirements: [hashlib, urllib2, xml.etree]
+requirements: [ hashlib, urllib2, xml.etree ]
 '''
 
 EXAMPLES = '''
@@ -93,16 +104,19 @@ EXAMPLES = '''
     name=org.apache.maven:maven
     dest=/tmp
 
-- name: download SNAPSHOT version from the specified Maven repository
+- name: download SNAPSHOT version from a private Maven repository
   mvn_get: >
     name=org.apache.maven:maven:3.2.2-SNAPSHOT
-    repo_url=http://oss.sonatype.org/content/repositories/snapshots
+    repo_url=https://maven.example.org/content/repositories/snapshots
+    repo_username=flynn
+    repo_password=top-secret
     dest=/tmp
 '''
 
 import hashlib
 import sys
 import xml.etree.ElementTree as ET
+from base64 import b64encode
 from os import path
 from urllib2 import Request, urlopen, URLError, HTTPError
 
@@ -158,10 +172,12 @@ class Artifact(object):
 
 class MavenDownloader:
 
-    def __init__(self, base):
+    def __init__(self, base, username=None, password=None):
         if base.endswith('/'):
             base = base[0:-1]
         self.base = base
+        self.username = username
+        self.password = password
         self.user_agent = 'Ansible'
 
     def download(self, artifact, dest, check_mode):
@@ -233,6 +249,10 @@ class MavenDownloader:
 
     def _request(self, url, failmsg, f):
         headers = {'User-Agent': self.user_agent}
+        if self.username and self.password:
+            credentials = b64encode(self.username + ':' + self.password)
+            headers['Authorization'] = "Basic %s" % credentials
+
         req = Request(url, None, headers)
         try:
             response = urlopen(req)
@@ -290,15 +310,17 @@ class DownloaderError(Error):
 def main():
     module = AnsibleModule(
         argument_spec={
-            'name':        {'aliases': ['artifact']},
-            'group_id':    {},
-            'artifact_id': {},
-            'version':     {},
-            'classifier':  {},
-            'extension':   {'default': 'jar'},
-            'repo_url':    {'aliases': ['repo_uri'], 'default': 'http://repo1.maven.org/maven2'},
-            'dest':        {'required': True},
-            'state':       {'choices': ['present'], 'default': 'present'}
+            'name':          {'aliases': ['artifact']},
+            'group_id':      {},
+            'artifact_id':   {},
+            'version':       {},
+            'classifier':    {},
+            'extension':     {'default': 'jar'},
+            'repo_url':      {'aliases': ['repo_uri'], 'default': 'http://repo1.maven.org/maven2'},
+            'repo_username': {'aliases': ['username']},
+            'repo_password': {'aliases': ['password'], 'default': ''},
+            'dest':          {'required': True},
+            'state':         {'choices': ['present'], 'default': 'present'}
         },
         required_one_of=[['name', 'group_id']],
         mutually_exclusive=[['name', arg] for arg in ('group_id', 'artifact_id')],
@@ -323,7 +345,7 @@ def main():
             artifact = Artifact(p.group_id, p.artifact_id, p.version,
                                 p.classifier, p.extension)
 
-        dw = MavenDownloader(p.repo_url)
+        dw = MavenDownloader(p.repo_url, p.repo_username, p.repo_password)
         dest = path.expanduser(p.dest)
 
         result = dw.download(artifact, dest, module.check_mode)
