@@ -152,7 +152,7 @@ def main():
     module = AnsibleModule(
         argument_spec={
             'login_user':     {'aliases': ['user']},
-            'login_password': {'aliases': ['password']},
+            'login_password': {'aliases': ['password'], no_log: True},
             'login_host':     {'aliases': ['host'], 'default': 'localhost'},
             'login_port':     {'aliases': ['port'], 'default': 27017},
             'hosts':          {'aliases': ['members'], 'required': True},
